@@ -3,7 +3,7 @@ import { fetchCSVFromS3, readProcessedList, saveProcessedList, testS3Connections
 import { sendToHubspot } from "../utils/hubspot.js";
 
 export const config = {
-  runtime: "nodejs18.x",
+  runtime: "nodejs",
 };
 
 export default async function handler(req, res) {
