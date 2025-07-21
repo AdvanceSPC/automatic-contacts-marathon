@@ -1,3 +1,4 @@
+// ./utils/s3Helpers.js
 import {
   S3Client,
   GetObjectCommand,
@@ -60,6 +61,8 @@ export async function fetchCSVFromS3(fileName) {
             convenio: row.convenio || null,
             fecha_inicio_convenio: row.fecha_inicio_convenio || null,
             fecha_fin_convenio: row.fecha_fin_convenio || null,
+            // ✅ Asegurar que sean SOLO contactos (no marketing ni deals)
+            lifecyclestage: "other", // Esto los marca como contactos normales
           },
         });
       })
