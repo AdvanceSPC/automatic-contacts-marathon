@@ -1,6 +1,5 @@
 import dayjs from "dayjs";
-import { fetchCSVFromS3 } from "../utils/s3Helpers.js";
-import { readProcessedList, saveProcessedList } from "../utils/s3Helpers.js";
+import { fetchCSVFromS3, readProcessedList, saveProcessedList, testS3Connections } from "../utils/s3Helpers.js";
 import { sendToHubspot } from "../utils/hubspot.js";
 
 export const config = {
@@ -8,6 +7,13 @@ export const config = {
 };
 
 export default async function handler(req, res) {
+  console.log("🔌 Verificando conexión con buckets S3...");
+
+  const s3Ok = await testS3Connections();
+  if (!s3Ok) {
+    return res.status(500).send("❌ Fallo en conexión a uno o ambos buckets S3.");
+  }
+
   const fecha = dayjs().subtract(1, "day").format("YYYYMMDD");
   const fileName = `delta_contacto_${fecha}.csv`;
 

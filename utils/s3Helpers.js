@@ -2,6 +2,7 @@ import {
   S3Client,
   GetObjectCommand,
   PutObjectCommand,
+  ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import csv from "csv-parser";
 import { Readable } from "stream";
@@ -95,4 +96,32 @@ export async function saveProcessedList(list) {
   });
 
   await s3Hist.send(command);
+}
+
+// Verificar conexión a los buckets S3
+export async function testS3Connections() {
+  try {
+    // Probar conexión al bucket de lectura
+    await s3Read.send(
+      new ListObjectsV2Command({
+        Bucket: process.env.AWS1_BUCKET,
+        MaxKeys: 1,
+      })
+    );
+    console.log("✅ Conexión exitosa a bucket de lectura (AWS1)");
+
+    // Probar conexión al bucket de historial
+    await s3Hist.send(
+      new ListObjectsV2Command({
+        Bucket: process.env.AWS2_BUCKET,
+        MaxKeys: 1,
+      })
+    );
+    console.log("✅ Conexión exitosa a bucket de historial (AWS2)");
+
+    return true;
+  } catch (err) {
+    console.error("❌ Fallo en conexión a uno o ambos buckets S3:", err);
+    return false;
+  }
 }
