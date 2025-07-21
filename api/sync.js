@@ -1,6 +1,20 @@
-import dayjs from "dayjs";
-import { fetchCSVFromS3, readProcessedList, saveProcessedList, testS3Connections } from "../utils/s3Helpers.js";
+import {
+  fetchCSVFromS3,
+  readProcessedList,
+  saveProcessedList,
+  testS3Connections,
+} from "../utils/s3Helpers.js";
 import { sendToHubspot } from "../utils/hubspot.js";
+import { ListObjectsV2Command } from "@aws-sdk/client-s3";
+
+const AWS1_BUCKET = process.env.AWS1_BUCKET;
+const s3Read = new (await import("@aws-sdk/client-s3")).S3Client({
+  region: process.env.AWS1_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS1_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS1_SECRET_ACCESS_KEY,
+  },
+});
 
 export const config = {
   runtime: "nodejs",
@@ -14,39 +28,48 @@ export default async function handler(req, res) {
     return res.status(500).send("❌ Fallo en conexión a uno o ambos buckets S3.");
   }
 
-  const fecha = dayjs().subtract(1, "day").format("YYYYMMDD");
-  const fileName = `delta_contacto_${fecha}.csv`;
-
-  console.log(`📁 Buscando archivo: ${fileName}`);
-
+  console.log("📃 Cargando historial...");
   const processed = await readProcessedList();
-  console.log("📃 Archivos procesados hasta ahora:", processed);
 
-  if (processed.includes(fileName)) {
-    console.log(`🟡 Ya se procesó anteriormente: ${fileName}`);
-    return res.status(200).send(`🟡 Ya fue procesado: ${fileName}`);
+  // 🔍 Listar todos los archivos en el bucket de lectura
+  const command = new ListObjectsV2Command({
+    Bucket: AWS1_BUCKET,
+    Prefix: "delta_contacto_", // Solo archivos relevantes
+  });
+
+  const { Contents = [] } = await s3Read.send(command);
+
+  const nuevosArchivos = Contents.map((obj) => obj.Key)
+    .filter((key) => key.endsWith(".csv"))
+    .filter((key) => !processed.includes(key));
+
+  if (nuevosArchivos.length === 0) {
+    console.log("🟡 No hay nuevos archivos para procesar.");
+    return res.status(200).send("🟡 No hay archivos nuevos.");
   }
 
-  try {
-    console.log("⬇️ Descargando archivo desde S3...");
-    const contacts = await fetchCSVFromS3(fileName);
+  for (const fileName of nuevosArchivos) {
+    try {
+      console.log(`⬇️ Procesando archivo: ${fileName}`);
+      const contacts = await fetchCSVFromS3(fileName);
 
-    if (contacts.length === 0) {
-      console.warn("⚠️ Archivo vacío.");
-      return res.status(200).send("⚠️ El archivo está vacío.");
+      if (!contacts.length) {
+        console.warn(`⚠️ Archivo vacío: ${fileName}`);
+        continue;
+      }
+
+      console.log(`📨 Enviando ${contacts.length} contactos a HubSpot...`);
+      await sendToHubspot(contacts);
+
+      processed.push(fileName);
+      console.log(`✅ Procesado exitosamente: ${fileName}`);
+    } catch (error) {
+      console.error(`❌ Error procesando ${fileName}:`, error);
     }
-
-    console.log(`👥 ${contacts.length} contactos encontrados. Enviando a HubSpot...`);
-    await sendToHubspot(contacts);
-
-    processed.push(fileName);
-    console.log(`💾 Guardando ${fileName} como procesado...`);
-    await saveProcessedList(processed);
-
-    console.log("✅ Proceso finalizado exitosamente.");
-    return res.status(200).send(`✅ Archivo ${fileName} procesado y enviado`);
-  } catch (error) {
-    console.error("❌ Error durante el proceso:", error);
-    return res.status(500).send("Error procesando archivo.");
   }
+
+  console.log("💾 Actualizando historial...");
+  await saveProcessedList(processed);
+
+  return res.status(200).send(`✅ Procesados ${nuevosArchivos.length} archivos nuevos.`);
 }
