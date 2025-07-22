@@ -8,7 +8,7 @@ import {
 import csv from "csv-parser";
 import { Readable } from "stream";
 
-// Cliente S3 para la cuenta Marathon (lectura del CSV)
+// Cliente S3 cuenta Marathon (lectura del CSV)
 const s3Read = new S3Client({
   region: process.env.AWS1_REGION,
   credentials: {
@@ -17,7 +17,7 @@ const s3Read = new S3Client({
   },
 });
 
-// Cliente S3 para la cuenta Advance (guardar historial)
+// Cliente S3 cuenta Advance (guardar historial)
 const s3Hist = new S3Client({
   region: process.env.AWS2_REGION,
   credentials: {
@@ -61,8 +61,7 @@ export async function fetchCSVFromS3(fileName) {
             convenio: row.convenio || null,
             fecha_inicio_convenio: row.fecha_inicio_convenio || null,
             fecha_fin_convenio: row.fecha_fin_convenio || null,
-            // ✅ Asegurar que sean SOLO contactos (no marketing ni deals)
-            lifecyclestage: "other", // Esto los marca como contactos normales
+            lifecyclestage: "other",
           },
         });
       })
@@ -104,7 +103,6 @@ export async function saveProcessedList(list) {
 // Verificar conexión a los buckets S3
 export async function testS3Connections() {
   try {
-    // Probar conexión al bucket de lectura
     await s3Read.send(
       new ListObjectsV2Command({
         Bucket: process.env.AWS1_BUCKET,

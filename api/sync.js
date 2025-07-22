@@ -35,7 +35,7 @@ export default async function handler(req, res) {
   // 🔍 Listar todos los archivos en el bucket de lectura
   const command = new ListObjectsV2Command({
     Bucket: AWS1_BUCKET,
-    Prefix: "delta_contacto_", // Solo archivos relevantes
+    Prefix: "delta_contacto_",
   });
 
   const { Contents = [] } = await s3Read.send(command);
