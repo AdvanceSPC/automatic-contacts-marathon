@@ -7,15 +7,14 @@ const BATCH_SIZE = 100;
 export async function sendToHubspot(contactos) {
   const apiKey = process.env.HUBSPOT_API_KEY;
 
-  const upsertPayloads = contactos
+  const inputs = contactos
     .filter((c) => c.properties?.contact_id)
     .map((c) => ({
-      idProperty: "contact_id",
       properties: c.properties,
     }));
 
-  for (let i = 0; i < upsertPayloads.length; i += BATCH_SIZE) {
-    const batch = upsertPayloads.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < inputs.length; i += BATCH_SIZE) {
+    const batch = inputs.slice(i, i + BATCH_SIZE);
 
     try {
       const res = await fetch(`${HUBSPOT_BASE}/crm/v3/objects/contacts/batch/upsert`, {
@@ -24,7 +23,10 @@ export async function sendToHubspot(contactos) {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ inputs: batch }),
+        body: JSON.stringify({
+          idProperty: "contact_id",
+          inputs: batch,
+        }),
       });
 
       if (!res.ok) {
