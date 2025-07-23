@@ -1,105 +1,40 @@
+// utils/hubspot.js
 import fetch from "node-fetch";
 
 const HUBSPOT_BASE = "https://api.hubapi.com";
+const BATCH_SIZE = 100;
 
 export async function sendToHubspot(contactos) {
   const apiKey = process.env.HUBSPOT_API_KEY;
-  const batchSize = 100;
 
-  for (let i = 0; i < contactos.length; i += batchSize) {
-    const batch = contactos.slice(i, i + batchSize);
+  const upsertPayloads = contactos
+    .filter((c) => c.properties?.contact_id)
+    .map((c) => ({
+      idProperty: "contact_id",
+      properties: c.properties,
+    }));
 
-    for (const contact of batch) {
-      const props = contact.properties;
-      const contactIdValue = props.contact_id;
+  for (let i = 0; i < upsertPayloads.length; i += BATCH_SIZE) {
+    const batch = upsertPayloads.slice(i, i + BATCH_SIZE);
 
-      if (!contactIdValue) {
-        console.warn("⚠️ Contacto sin contact_id. Se omite.");
-        continue;
-      }
-
-      try {
-        const existing = await buscarPorContactId(contactIdValue, apiKey);
-
-        if (existing) {
-          await actualizarContacto(existing.id, props, apiKey);
-        } else {
-          await crearContacto(props, apiKey);
-        }
-      } catch (err) {
-        console.error("❌ Error procesando contacto:", err.message);
-      }
-    }
-
-    console.log(`✅ Batch procesado: ${i} - ${i + batch.length - 1}`);
-  }
-}
-
-async function buscarPorContactId(contactId, apiKey) {
-  const res = await fetch(`${HUBSPOT_BASE}/crm/v3/objects/contacts/search`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      filterGroups: [
-        {
-          filters: [
-            {
-              propertyName: "contact_id",
-              operator: "EQ",
-              value: contactId,
-            },
-          ],
+    try {
+      const res = await fetch(`${HUBSPOT_BASE}/crm/v3/objects/contacts/batch/upsert`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
-      ],
-      properties: ["contact_id"],
-    }),
-  });
+        body: JSON.stringify({ inputs: batch }),
+      });
 
-  const data = await res.json();
-
-  if (!res.ok) {
-    console.error(`❌ Error buscando contact_id=${contactId}:`, data);
-    return null;
-  }
-
-  return data.results && data.results.length > 0 ? data.results[0] : null;
-}
-
-async function actualizarContacto(id, properties, apiKey) {
-  const res = await fetch(`${HUBSPOT_BASE}/crm/v3/objects/contacts/${id}`, {
-    method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ properties }),
-  });
-
-  if (!res.ok) {
-    const error = await res.text();
-    console.error(`❌ Error actualizando contacto ${id}:`, error);
-  } else {
-    console.log(`🔄 Contacto actualizado: ${id}`);
-  }
-}
-
-async function crearContacto(properties, apiKey) {
-  const res = await fetch(`${HUBSPOT_BASE}/crm/v3/objects/contacts`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ properties }),
-  });
-
-  if (!res.ok) {
-    const error = await res.text();
-    console.error("❌ Error creando contacto:", error);
-  } else {
-    console.log("🆕 Contacto creado");
+      if (!res.ok) {
+        const error = await res.text();
+        console.error(`❌ Error en batch ${i}-${i + batch.length - 1}:`, error);
+      } else {
+        console.log(`✅ Batch ${i}-${i + batch.length - 1} procesado correctamente.`);
+      }
+    } catch (err) {
+      console.error(`❌ Excepción al enviar batch ${i}-${i + batch.length - 1}:`, err);
+    }
   }
 }
