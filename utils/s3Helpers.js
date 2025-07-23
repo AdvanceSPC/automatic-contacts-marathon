@@ -43,9 +43,9 @@ export async function fetchCSVFromS3(fileName) {
       .on("data", (row) => {
         contacts.push({
           properties: {
+            contact_id1: row.contact_id || null, // 👉 aquí asignamos contact_id1
             email_principal: row.email || null,
             tipo_de_identificacion: row.tipo_de_identificacion || null,
-            contact_id: row.contact_id || null,
             estado_empleado: row.estado_empleado || null,
             firstname: row.firstname || null,
             lastname: row.lastname || null,
