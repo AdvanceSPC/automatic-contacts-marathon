@@ -8,9 +8,10 @@ export async function sendToHubspot(contactos) {
   const apiKey = process.env.HUBSPOT_API_KEY;
 
   const inputs = contactos
-    .filter((c) => c.properties?.contact_id1)
+    .filter((c) => c.properties?.contact_id)
     .map((c) => ({
-      id: c.properties.contact_id1,
+      id: c.properties.contact_id,         
+      idProperty: "contact_id",           
       properties: c.properties,
     }));
 
@@ -27,7 +28,6 @@ export async function sendToHubspot(contactos) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            idProperty: "contact_id1",
             inputs: batch,
           }),
         }
