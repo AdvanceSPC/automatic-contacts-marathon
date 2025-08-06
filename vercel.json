@@ -4,7 +4,15 @@
   "crons": [
     {
       "path": "/api/sync",
-      "schedule": "10 13 * * *"
+      "schedule": "50 15 * * *"
+    },
+    {
+      "path": "/api/sync",
+      "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/sync",
+      "schedule": "7 16 * * *"
     }
   ]
 }
