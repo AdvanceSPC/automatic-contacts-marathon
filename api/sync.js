@@ -152,7 +152,7 @@ export default async function handler(req, res) {
         });
       }
       
-      // Comenzar desde el siguiente chunk no completado
+      // Comenzar desde el siguiente chunk
       const startChunk = processedChunks;
       console.log(`🔄 Iniciando procesamiento desde chunk ${startChunk + 1}...`);
       
