@@ -1,25 +1,15 @@
 //Contactos
 // api/sync.js
 import {
-  fetchCSVFromS3,
   readProcessedList,
   saveProcessedList,
-  testS3Connections,
+  testS3Connection,
   getFileProgress,
   saveFileProgress,
   markChunkAsCompleted
 } from "../utils/s3Helpers.js";
+import { listSFTPFiles, fetchCSVFromSFTP, testSFTPConnection } from "../utils/sftpHelper.js";
 import { sendToHubspot } from "../utils/hubspot.js";
-import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
-
-const AWS1_BUCKET = process.env.AWS1_BUCKET;
-const s3Read = new S3Client({
-  region: process.env.AWS1_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS1_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS1_SECRET_ACCESS_KEY,
-  },
-});
 
 export const config = {
   runtime: "nodejs",
@@ -34,33 +24,39 @@ export default async function handler(req, res) {
   console.log(`⏰ Tiempo máximo de ejecución: ${Math.round(MAX_EXECUTION_TIME/1000)}s`);
   console.log(`🕒 Inicio: ${new Date().toLocaleString('es-EC')}`);
   
-  console.log("🔌 Verificando conexión con buckets S3...");
-
-  const s3Ok = await testS3Connections();
-  if (!s3Ok) {
-    console.error("❌ Error crítico: No se pudo conectar a los buckets S3");
-    return res.status(500).send("❌ Fallo en conexión a uno o ambos buckets S3.");
+  console.log("🔌 Verificando conexiones...");
+  console.log("🔌 Probando conexión SFTP Marathon (lectura de archivos)...");
+  
+  const sftpOk = await testSFTPConnection();
+  if (!sftpOk) {
+    console.error("❌ Error crítico: No se pudo conectar a SFTP Marathon");
+    return res.status(500).send("❌ Fallo en conexión a SFTP Marathon.");
   }
-  console.log("✅ Conexión a buckets S3 exitosa");
+  console.log("✅ Conexión a SFTP Marathon exitosa");
+
+  console.log("🔌 Probando conexión S3 Advance (historial)...");
+  const s3Ok = await testS3Connection();
+  if (!s3Ok) {
+    console.error("❌ Error crítico: No se pudo conectar a S3 Advance");
+    return res.status(500).send("❌ Fallo en conexión a S3 Advance.");
+  }
+  console.log("✅ Conexión a S3 Advance exitosa");
 
   console.log("📃 Cargando historial de archivos procesados...");
   const processed = await readProcessedList();
   console.log(`📋 Archivos ya procesados: ${processed.length}`);
 
-  const command = new ListObjectsV2Command({
-    Bucket: AWS1_BUCKET,
-    Prefix: "delta_contacto_",
-  });
-
-  const { Contents = [] } = await s3Read.send(command);
-  const nuevosArchivos = Contents.map((obj) => obj.Key)
-    .filter((key) => key.endsWith(".csv"))
-    .filter((key) => !processed.includes(key))
-    .sort(); 
+  // Listar archivos desde SFTP
+  const remotePath = process.env.SFTP_REMOTE_PATH || '/';
+  const sftpFiles = await listSFTPFiles(remotePath);
+  
+  const nuevosArchivos = sftpFiles
+    .filter(file => !processed.includes(file.name))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(file => file.name);
 
   console.log(`\n📁 ================== ANÁLISIS DE ARCHIVOS CONTACTOS ==================`);
-  console.log(`📂 Total archivos en bucket: ${Contents.length}`);
-  console.log(`📄 Archivos CSV encontrados: ${Contents.filter(obj => obj.Key.endsWith('.csv')).length}`);
+  console.log(`📂 Total archivos en SFTP: ${sftpFiles.length}`);
   console.log(`✅ Archivos ya procesados: ${processed.length}`);
   console.log(`🆕 Archivos nuevos para procesar: ${nuevosArchivos.length}`);
   
@@ -109,8 +105,8 @@ export default async function handler(req, res) {
       console.log(`🆕 INICIANDO nuevo procesamiento de ${fileName}`);
     }
     
-    console.log(`\n📥 Descargando y parseando CSV desde S3...`);
-    contacts = await fetchCSVFromS3(fileName);
+    console.log(`\n📥 Descargando y parseando CSV desde SFTP...`);
+    contacts = await fetchCSVFromSFTP(fileName);
 
     if (!contacts.length) {
       console.warn(`⚠️ ARCHIVO VACÍO detectado: ${fileName}`);
