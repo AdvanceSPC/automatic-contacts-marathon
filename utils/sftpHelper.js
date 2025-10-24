@@ -11,6 +11,25 @@ const sftpConfig = {
   password: process.env.SFTP_PASSWORD,
 };
 
+function convertDateToHubSpotFormat(dateString) {
+  if (!dateString || dateString.trim() === '') return null;
+  
+  try {
+    const [year, month, day] = dateString.split('-').map(Number);
+    const ecuadorDate = new Date(Date.UTC(year, month - 1, day, 5, 0, 0, 0));
+    
+    if (isNaN(ecuadorDate.getTime())) {
+      console.warn(`⚠️  Fecha inválida: ${dateString}`);
+      return null;
+    }
+    
+    return ecuadorDate.getTime();
+  } catch (error) {
+    console.warn(`⚠️  Error convirtiendo fecha ${dateString}:`, error);
+    return null;
+  }
+}
+
 
 export async function listSFTPFiles(remotePath = '/') {
   const sftp = new Client();
@@ -74,12 +93,12 @@ async function parseCSVBuffer(buffer) {
   const contacts = [];
   const stream = Readable.from(buffer);
 
-
   await new Promise((resolve, reject) => {
     stream
       .pipe(csv({ separator: ";" }))
       .on("data", (row) => {
         if (!row.contact_id) return;
+        
         contacts.push({
           properties: {
             contact_id: row.contact_id || null,
@@ -100,8 +119,8 @@ async function parseCSVBuffer(buffer) {
             convenio: row.convenio || null,
             fecha_inicio_convenio: row.fecha_inicio_convenio || null,
             fecha_fin_convenio: row.fecha_fin_convenio || null,
-            fecha_primera_compra: row.fecha_primera_compra || null,
-            fecha_registro_web: row.fecha_registro_web || null,
+            fecha_primera_compra: convertDateToHubSpotFormat(row.fecha_primera_compra),
+            fecha_registro_web: convertDateToHubSpotFormat(row.fecha_registro_web),
             lifecyclestage: "other",
           },
         });
@@ -109,7 +128,6 @@ async function parseCSVBuffer(buffer) {
       .on("end", resolve)
       .on("error", reject);
   });
-
 
   console.log(`📊 Contactos extraídos del CSV: ${contacts.length}`);
   return contacts;
