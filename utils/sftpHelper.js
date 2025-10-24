@@ -11,22 +11,29 @@ const sftpConfig = {
   password: process.env.SFTP_PASSWORD,
 };
 
+
+// Función para convertir fecha YYYY-MM-DD a timestamp de medianoche UTC
 function convertDateToHubSpotFormat(dateString) {
-  if (!dateString || dateString.trim() === '') return null;
+  if (!dateString || dateString.trim() === '') return undefined; // undefined = no enviar la propiedad
   
   try {
+    // Parsear la fecha
     const [year, month, day] = dateString.split('-').map(Number);
-    const ecuadorDate = new Date(Date.UTC(year, month - 1, day, 5, 0, 0, 0));
     
-    if (isNaN(ecuadorDate.getTime())) {
+    // Crear fecha a medianoche UTC (00:00:00) - lo que HubSpot requiere
+    const utcDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    
+    // Verificar si la fecha es válida
+    if (isNaN(utcDate.getTime())) {
       console.warn(`⚠️  Fecha inválida: ${dateString}`);
-      return null;
+      return undefined;
     }
     
-    return ecuadorDate.getTime();
+    // Retornar timestamp en milisegundos (medianoche UTC)
+    return utcDate.getTime();
   } catch (error) {
     console.warn(`⚠️  Error convirtiendo fecha ${dateString}:`, error);
-    return null;
+    return undefined;
   }
 }
 
@@ -99,31 +106,41 @@ async function parseCSVBuffer(buffer) {
       .on("data", (row) => {
         if (!row.contact_id) return;
         
-        contacts.push({
-          properties: {
-            contact_id: row.contact_id || null,
-            email_principal: row.email || null,
-            tipo_de_identificacion: row.tipo_de_identificacion || null,
-            estado_empleado: row.estado_empleado || null,
-            firstname: row.firstname || null,
-            lastname: row.lastname || null,
-            genero_cliente: row.genero_cliente || null,
-            rango_edad: row.rango_edad || null,
-            fecha_nacimiento: row.fecha_nacimiento || null,
-            mes_cumpleanios: row.mes_cumpleanios || null,
-            correo_secundario: row.correo_secundario || null,
-            phone: row.phone || null,
-            contactable: row.contactable || null,
-            fecha_registro_newsletter: row.fecha_registro_newsletter || null,
-            campana_newsletter: row.campana_newsletter || null,
-            convenio: row.convenio || null,
-            fecha_inicio_convenio: row.fecha_inicio_convenio || null,
-            fecha_fin_convenio: row.fecha_fin_convenio || null,
-            fecha_primera_compra: convertDateToHubSpotFormat(row.fecha_primera_compra),
-            fecha_registro_web: convertDateToHubSpotFormat(row.fecha_registro_web),
-            lifecyclestage: "other",
-          },
-        });
+        // Construir objeto de propiedades
+        const properties = {
+          contact_id: row.contact_id || null,
+          email_principal: row.email || null,
+          tipo_de_identificacion: row.tipo_de_identificacion || null,
+          estado_empleado: row.estado_empleado || null,
+          firstname: row.firstname || null,
+          lastname: row.lastname || null,
+          genero_cliente: row.genero_cliente || null,
+          rango_edad: row.rango_edad || null,
+          fecha_nacimiento: row.fecha_nacimiento || null,
+          mes_cumpleanios: row.mes_cumpleanios || null,
+          correo_secundario: row.correo_secundario || null,
+          phone: row.phone || null,
+          contactable: row.contactable || null,
+          fecha_registro_newsletter: row.fecha_registro_newsletter || null,
+          campana_newsletter: row.campana_newsletter || null,
+          convenio: row.convenio || null,
+          fecha_inicio_convenio: row.fecha_inicio_convenio || null,
+          fecha_fin_convenio: row.fecha_fin_convenio || null,
+          lifecyclestage: "other",
+        };
+        
+        // Agregar fechas solo si existen (undefined = no se envía a HubSpot)
+        const fechaPrimeraCompra = convertDateToHubSpotFormat(row.fecha_primera_compra);
+        if (fechaPrimeraCompra !== undefined) {
+          properties.fecha_primera_compra = fechaPrimeraCompra;
+        }
+        
+        const fechaRegistroWeb = convertDateToHubSpotFormat(row.fecha_registro_web);
+        if (fechaRegistroWeb !== undefined) {
+          properties.fecha_registro_web = fechaRegistroWeb;
+        }
+        
+        contacts.push({ properties });
       })
       .on("end", resolve)
       .on("error", reject);
